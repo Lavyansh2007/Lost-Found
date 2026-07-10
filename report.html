@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Report Lost</title>
+<link rel="stylesheet" href="style.css">
+<script src="script.js"></script>
+</head>
+
+<body>
+
+<header>
+  <h1>Lost & Found Portal</h1>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="report.html">Report Lost</a>
+    <a href="lostitems.html">Lost Items</a>
+    <a href="contact.html">Contact</a>
+    <a href="about.html">About</a>
+  </nav>
+</header>
+
+<div class="container">
+<div class="card">
+<h3>Report Lost Item</h3>
+
+<form onsubmit="return submitLostItem()">
+  <label>Item Name:</label>
+  <input type="text" id="item" required>
+
+  <label>Description:</label>
+  <textarea id="desc" required></textarea>
+
+  <label>Email:</label>
+  <input type="email" id="email" required>
+
+  <button type="submit">Verify & Submit</button>
+</form>
+
+</div>
+</div>
+
+<footer>Lost & Found Management System</footer>
+</body>
+</html>

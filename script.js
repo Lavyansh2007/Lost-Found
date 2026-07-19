@@ -49,6 +49,39 @@ function updateAdminUI() {
     }
 }
 
+async function loadLostItems() {
+    const response = await fetch("/lost-items");
+
+    if (!response.ok) {
+        throw new Error("Failed to fetch lost items.");
+    } 
+    const lostItems = await response.json();
+    console.log(lostItems);
+    console.log("Loop is starting");
+
+    const list = document.getElementById("lostList");
+    if (!list) return; //incase the element is not found list will become null and list.innerHTML will crash.
+
+    list.innerHTML = "" ;
+
+    const isAdmin = localStorage.getItem("isAdmin") == "true";
+
+    if (lostItems.length == 0){
+        list.innerHTML = "<p>No lost items reported yet.</p>";
+        return;
+    }
+    lostItems.forEach(function(item){
+        const card = document.createElement("div");
+        card.innerHTML = `
+            <h3>${item.item}</h3>
+            <p>Description: ${item.description}</p>
+            <p>Status: ${item.status}</p>
+            `;
+        list.appendChild(card);
+
+    });
+}
+
 /* =====================================
    Submit Lost Item
 ===================================== */
@@ -81,77 +114,28 @@ function submitLostItem() {
 }
 
 /* =====================================
-   Load Lost Items
-===================================== */
-function loadLostItems() {
-    var lostItems = JSON.parse(localStorage.getItem("lostItems")) || [];
-    var list = document.getElementById("lostList");
-    if (!list) return;
-
-    list.innerHTML = "";
-    var isAdmin = localStorage.getItem("isAdmin") === "true";
-
-    if (lostItems.length === 0) {
-        list.innerHTML = "<p>No lost items reported yet.</p>";
-        return;
-    }
-
-    lostItems.forEach(function(item, index) {
-
-        if (!item.status) item.status = "Pending";
-        if (!item.replies) item.replies = [];
-
-        var statusColor = item.status === "Found" ? "green" : "orange";
-
-        var repliesHTML = "";
-        if (item.replies.length > 0) {
-            repliesHTML = "<h4>Replies:</h4>";
-            item.replies.forEach(function(r) {
-                repliesHTML += `<p><b>${r.email}:</b> ${r.msg}</p>`;
-            });
-        }
-
-        var deleteBtn = "";
-        if (isAdmin) {
-            deleteBtn = `<button onclick="deleteReport(${index})">Delete Report</button>`;
-        }
-
-        var statusBtn = "";
-        if (item.status === "Pending") {
-            statusBtn = `<button onclick="markAsFound(${index})">Mark as Found</button>`;
-        }
-
-        list.innerHTML += `
-        <div class="card">
-            <h3>${item.item}</h3>
-            <p>${item.desc}</p>
-            <p><b>Status:</b> <span style="color:${statusColor}">${item.status}</span></p>
-            ${repliesHTML}
-            <button onclick="openReply(${index})">Reply (Found It)</button>
-            ${statusBtn}
-            ${deleteBtn}
-        </div>`;
-    });
-}
-
-/* =====================================
    Mark Item as Found (Reporter Only)
 ===================================== */
-function markAsFound(index) {
-    var email = prompt("Enter your email to confirm:");
+async function markAsFound(id) {
+    var email = prompt("Enter your email to confirm: ");
+    const response = await fetch(`/lost-items/${id}`,{
+        method: "PATCH",
 
-    var lostItems = JSON.parse(localStorage.getItem("lostItems"));
-
-    if (email !== lostItems[index].email) {
-        alert("Only the person who reported this item can change the status.");
-        return;
-    }
-
-    lostItems[index].status = "Found";
-    localStorage.setItem("lostItems", JSON.stringify(lostItems));
-
-    alert("Status updated to Found");
-    loadLostItems();
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            email: email
+        })
+    });
+    if (response.ok) {
+            console.log("Success!!");
+            loadLostItems();
+        } else {
+            alert("Failed!!");
+            return;
+        }
+    
 }
 
 /* =====================================

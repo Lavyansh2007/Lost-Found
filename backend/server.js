@@ -111,6 +111,41 @@ app.patch("/lost-items/:id", async (req,res) => { //HTML doesn't directly suppor
     
 });
 
+app.patch("/lost-items/:id/reply",async (req,res) => {
+
+    console.log("Reply route hit!!");
+    console.log(req.body);
+
+    const id = new ObjectId(req.params.id);
+    var email = req.body.email;
+    const message = req.body.message
+
+    const lostItem = await lostItemsCollection.findOne({
+        _id: id
+    });
+    if (lostItem.status == "Found") {
+        return res.status(400).send("This item has already been marked as found.");
+    }
+    if (!lostItem){
+        return res.status(404).send("Item not found!!");
+    }
+    await lostItemsCollection.updateOne(
+        {
+            _id: id
+        },
+        {
+            $push: {
+                replies: {
+                    email: email,
+                    message: message
+                }
+            }
+        }
+
+    );
+    res.send("Reply added successfully.");
+
+});
 connectDB();
 
 app.listen(PORT, () => {

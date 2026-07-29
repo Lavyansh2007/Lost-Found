@@ -1,39 +1,42 @@
+let currentFilter = "All";
 /* =====================================
    Admin Configuration
 ===================================== */
-var ADMIN_EMAIL = "adminkiet@gmail.com";
+const ADMIN_EMAIL = "adminkiet@gmail.com";
 
 /* =====================================
    Admin Login
 ===================================== */
 function setAdmin() {
-    var email = document.getElementById("adminEmail").value;
+    const email = document.getElementById("adminEmail").value;
 
     if (email === ADMIN_EMAIL) {
-        localStorage.setItem("isAdmin", "true");
-        alert("Admin access granted");
-        updateAdminUI();
-    } else {
-        alert("Invalid admin email");
+        sessionStorage.setItem("isAdmin", "true");
+        showToast("Admin access granted", "success");
+        setTimeout(() => {
+            window.location.href = "admin.html";
+        }, 800);
+        
     }
-    loadLostItems();
 }
 
 /* =====================================
    Admin Logout
 ===================================== */
 function adminLogout() {
-    localStorage.removeItem("isAdmin");
-    alert("Admin logged out successfully");
-    updateAdminUI();
-    loadLostItems();
+
+    sessionStorage.removeItem("isAdmin");
+
+    showToast("Logged Out", "success");
+
+    window.location.href = "lostitems.html";
 }
 
 /* =====================================
    Update Admin UI
 ===================================== */
 function updateAdminUI() {
-    var isAdmin = localStorage.getItem("isAdmin") === "true";
+    var isAdmin = sessionStorage.getItem("isAdmin") === "true";
 
     var loginBox = document.getElementById("adminLoginBox");
     var logoutBox = document.getElementById("adminLogoutBox");
@@ -48,127 +51,415 @@ function updateAdminUI() {
         logoutBox.style.display = "none";
     }
 }
+function setFilter(status){
 
+    currentFilter = status;
+
+    document
+        .querySelectorAll(".filter-container button")
+        .forEach(function(btn){
+
+            btn.classList.remove("filter-active");
+
+        });
+
+    document
+        .getElementById("filter" + status)
+        .classList.add("filter-active");
+
+    loadLostItems();
+
+}
 async function loadLostItems() {
-    const response = await fetch("/lost-items");
+    try{
+        const list = document.getElementById("lostList");
 
-    if (!response.ok) {
-        throw new Error("Failed to fetch lost items.");
-    } 
-    const lostItems = await response.json();
-    // console.log(lostItems);
-    // console.log("Loop is starting");
+        
+        const response = await fetch("/lost-items");
+        
 
-    const list = document.getElementById("lostList");
-    if (!list) return; //incase the element is not found list will become null and list.innerHTML will crash.
+        if (!response.ok) {
+            throw new Error("Failed to fetch lost items.");
+        } 
+        const lostItems = await response.json();
+        list.innerHTML = "";
+        
+        const searchText = document
+            .getElementById("searchBox")
+            .value
+            .toLowerCase();
 
-    list.innerHTML = "" ;
+        
+        if (!list) return; //incase the element is not found list will become null and list.innerHTML will crash.
 
-    // const isAdmin = localStorage.getItem("isAdmin") == "true";
+        const isAdmin = sessionStorage.getItem("isAdmin") ==="true";
 
-    if (lostItems.length == 0){
-        list.innerHTML = "<p>No lost items reported yet.</p>";
+        
+
+        
+        if (lostItems.length === 0){
+            list.innerHTML = `
+                <div class="card" style="text-align:center;">
+                    <h2>📭</h2>
+                    <h3>No Lost Items Found</h3>
+                    <p>Try changing your search or filter.</p>
+                </div>
+                `;
+            return;
+        }
+        lostItems.forEach(item => {
+            if (
+                !item.item.toLowerCase().includes(searchText)
+            ){
+                return;
+            }
+            if (
+                currentFilter !== "All" &&
+                item.status !== currentFilter
+            ){
+                return;
+            }
+            let repliesHTML = "";
+
+            if (item.replies && item.replies.length > 0){
+                repliesHTML += `
+                    <hr>
+                    <h4>
+                    
+                    <i class="fa-solid fa-comments"></i>
+                    Replies
+                    </h4>
+                `;
+                item.replies.forEach(reply => {
+                    repliesHTML += `
+                        <div class="reply-card">
+                            <p><strong>Reply By:</strong>${reply.email}</p>
+                            <p><strong>Message :</strong>${reply.message}</p>
+                        </div>
+                    `;
+                });
+            }
+
+        list.innerHTML += `
+            <div class="card">
+                <h3>
+                    <i class="fa-solid fa-box"></i>
+                    ${item.item}
+                </h3>
+                
+
+                
+                <strong>Description</strong><br>${item.description}</p>
+
+            
+            <div class="status-badge ${
+            item.status==="Pending"
+                ?
+                "status-pending"
+                :
+                "status-found"
+                }">
+
+                ${
+                item.status==="Pending"
+                ?
+                "🟡 Pending"
+                :
+                "🟢 Found"
+                }
+
+            </div>
+        
+            
+
+                ${
+                    item.status==="Pending"
+                    ?
+                    `
+                    <div class="action-buttons">
+
+                    ${
+                    isAdmin
+                    ?
+                    `
+                    <button class="found-btn" onclick="markAsFound(this,'${item._id}')">
+                        <i class="fa-solid fa-check"></i>
+                            Mark as Found
+                    </button>
+
+                    <button class="delete-btn" onclick="deleteReport('${item._id}')">
+                        <i class="fa-solid fa-trash"></i>
+                            Delete
+                    </button>
+                    `
+                    :
+                    ""
+                    }
+
+                    <button class="reply-btn" onclick="openReply('${item._id}')">
+                        <i class="fa-solid fa-reply"></i>
+                            Reply
+                    </button>
+
+                    </div>
+                    `
+                    :
+                    `
+                    <div class="action-buttons">
+
+                    ${
+                    isAdmin
+                    ?
+                    `
+                    <button class="delete-btn" onclick="deleteReport('${item._id}')">
+                        <i class="fa-solid fa-trash"></i>
+                            Delete
+                    </button>
+                    `
+                    :
+                    ""
+                    }
+
+                    </div>
+                    `
+                    }
+                
+                ${repliesHTML}
+            </div>
+            
+        `;
+
+        });
+        if(currentFilter === "All"){
+        document.getElementById("filterAll").classList.add("filter-active");
+    }
+    }
+    catch(error){
+        showToast("Unable to load lost items.","error");
+        console.error(error);
+    }
+}
+function showToast(message, type){
+    const toast = document.createElement("div");
+    toast.className=`toast toast-${type}`;
+    toast.innerText = message;
+    document.body.appendChild(toast);
+    setTimeout(function(){
+        toast.remove();
+    },3000);
+}
+
+async function deleteReport(id) {
+    try{
+   
+    const confirmDelete = confirm("Are you sure you want to delete this item?");
+
+    if (!confirmDelete){
         return;
     }
-    lostItems.forEach(function(item) {
-        let repliesHTML = "";
-
-        if (item.replies && item.replies.length > 0){
-            repliesHTML += `
-                <hr>
-                <h4>Replies</h4>
-            `;
-            item.replies.forEach(function(reply){
-                repliesHTML += `
-                    <div class="reply-card">
-                        <p><strong>Reply By:</strong>${reply.email}</p>
-                        <p><strong>Message :</strong>${reply.message}</p>
-                    </div>
-                `;
-            });
-        }
-
-    list.innerHTML += `
-        <div class="card">
-            <h3>${item.item}</h3>
-
-            <p><strong>Description: </strong>${item.description}</p>
-
-            <p><strong>Status: </strong>${item.status}</p>
-
-            ${
-                item.status === "Pending"
-                ? `<button onclick="markAsFound('${item._id}')">
-                        Mark as Found
-                   </button>`
-                : ""
-            }
-            <button onclick="openReply('${item._id}')">
-                Reply
-            </button>
-            ${repliesHTML}
-        </div>
-        
-    `;
-
+    
+    const respone = await fetch(`/lost-items/${id}` ,{
+        method: "DELETE",
     });
+    
+    const message = await respone.text ();
+    
+    if (respone.ok) {
+        showToast(message,"success");
+        
+        if (document.getElementById("adminList")) {
+            loadAdminDashboard();
+        }
+        if (document.getElementById("lostList")) {
+            loadLostItems();
+        }
+    } else{
+        showToast(message,"error");
+    }
+    } catch(error){
+        showToast("Something went wrong.","error");
+        console.error(error);
+    }
+    
 }
 
 /* =====================================
    Submit Lost Item
 ===================================== */
 function submitLostItem() {
-    var item = document.getElementById("item").value;
-    var desc = document.getElementById("desc").value;
-    var email = document.getElementById("email").value;
+    const item = document.getElementById("item").value;
+    const desc = document.getElementById("desc").value;
+    const email = document.getElementById("email").value;
 
-    var otp = Math.floor(1000 + Math.random() * 9000);
-    var userOtp = prompt("OTP sent to email (demo): " + otp);
+    const otp = Math.floor(1000 + Math.random() * 9000);
+    const userOtp = prompt("OTP sent to email (demo): " + otp);
 
     if (userOtp != otp) {
-        alert("Email verification failed");
+        showToast("Email verification failed", "error");
         return false;
     }
 
-    var lostItems = JSON.parse(localStorage.getItem("lostItems")) || [];
-
-    lostItems.push({
-        item: item,
-        desc: desc,
-        email: email,
-        status: "Pending",
-        replies: []
-    });
-
-    localStorage.setItem("lostItems", JSON.stringify(lostItems));
-    alert("Lost item reported successfully");
+    
+    showToast("Lost item reported successfully", "success");
     return true;
 }
 
+async function loginAdmin() {
+
+    
+
+    const email = document.getElementById("adminEmail").value.trim();
+
+    if (email !== ADMIN_EMAIL) {
+        showToast("Invalid Admin Email", "error");
+        return;
+    }
+
+    sessionStorage.setItem("isAdmin", "true");
+
+    window.location.href = "admin.html";
+}
+
+async function loadAdminDashboard() {
+
+    // Load statistics
+    const statsResponse = await fetch("/admin/stats");
+    const stats = await statsResponse.json();
+
+    document.getElementById("totalReports").innerText = stats.total;
+    document.getElementById("pendingReports").innerText = stats.pending;
+    document.getElementById("foundReports").innerText = stats.found;
+
+    // Load all reports
+    const response = await fetch("/lost-items");
+    const items = await response.json();
+
+    const adminList = document.getElementById("adminList");
+
+    adminList.innerHTML = "";
+
+    items.forEach(item => {
+
+        adminList.innerHTML += `
+
+        <div class="card">
+
+            <h3>
+                <i class="fa-solid fa-box"></i>
+                ${item.item}
+            </h3>
+
+            <p>
+                <strong>Description :</strong>
+                ${item.description}
+            </p>
+
+            <p>
+                <strong>Email :</strong>
+                ${item.email}
+            </p>
+
+            <div class="status-badge ${
+                item.status === "Pending"
+                    ? "status-pending"
+                    : "status-found"
+            }">
+
+                ${item.status}
+
+            </div>
+
+            <div class="action-buttons">
+
+                ${
+                    item.status === "Pending"
+                    ?
+                    `
+                    <button class="found-btn"
+                        onclick="markAsFound(this,'${item._id}')">
+
+                        <i class="fa-solid fa-check"></i>
+
+                        Mark as Found
+
+                    </button>
+                    `
+                    :
+                    ""
+                }
+
+                <button class="delete-btn"
+                    onclick="deleteReport('${item._id}')">
+
+                    <i class="fa-solid fa-trash"></i>
+
+                    Delete
+
+                </button>
+
+            </div>
+
+        </div>
+
+        `;
+
+    });
+
+}
 /* =====================================
    Mark Item as Found (Reporter Only)
 ===================================== */
-async function markAsFound(id) {
-    var email = prompt("Enter your email to confirm: ");
-    const response = await fetch(`/lost-items/${id}`,{
-        method: "PATCH",
+async function markAsFound(button, id) {
+    const email = prompt("Enter your email to confirm:");
 
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            email: email
-        })
-    });
-    const message = await response.text();
-    if (response.ok) {
-            alert(message);
-            loadLostItems();
-        } else {
-            alert(message);
-            return;
-        }
+    if (!email) {
+        return;
+    }
     
+   
+   
+    const originalHTML = button.innerHTML;
+  
+    button.disabled = true;
+    button.innerHTML = `
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        Marking...
+    `;
+
+    try {
+
+        const response = await fetch(`/lost-items/${id}`, {
+            method: "PATCH",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                email: email
+            })
+        });
+
+        const message = await response.text();
+
+        if (response.ok) {
+            showToast("Item marked as Found!", "success");
+            
+            if (document.getElementById("adminList")) {
+                loadAdminDashboard();
+            }
+            if (document.getElementById("lostList")) {
+                loadLostItems();
+            }
+        } else {
+            showToast(message, "error");
+        }
+    } catch (err) {
+        showToast("Server Error", "error");
+    } finally {
+        // Restore button
+        button.disabled = false;
+        button.innerHTML = originalHTML;
+    }
+
 }
 
 /* =====================================
@@ -183,16 +474,17 @@ function openReply(id) {
    Save Reply
 ===================================== */
 async function saveReply(event) {
-    alert("savereply called!!");
+    try{
+   
     event.preventDefault();
-    console.log("1");
+    
     
     const email = document.getElementById("replyEmail").value;
-    console.log("2");
+    
     const message = document.getElementById("replyMsg").value;
-    console.log("3");
+
     const id = localStorage.getItem("replyId");
-    console.log("ID= ",id);
+   
     const response = await fetch(`/lost-items/${id}/reply`,{
         method: "PATCH",
 
@@ -204,37 +496,24 @@ async function saveReply(event) {
             message: message
         })
     });
-    console.log("5");
+    
     const replyMessage = await response.text();
 
     if (response.ok) {
-        alert(replyMessage);
+        showToast(replyMessage, "success");
         window.location.href = "lostitems.html";
     }else {
-        alert(replyMessage);
+        showToast(replyMessage, "error");
     
     } 
     
     
     return false;
+    } catch (error){
+        showToast("Something went wrong.","error");
+        console.error(error);
+}
     
 }
 
-/* =====================================
-   Delete Report (Admin Only)
-===================================== */
-function deleteReport(index) {
-    if (localStorage.getItem("isAdmin") !== "true") {
-        alert("Only admin can delete reports");
-        return;
-    }
 
-    if (!confirm("Are you sure you want to delete this report?")) return;
-
-    var lostItems = JSON.parse(localStorage.getItem("lostItems"));
-    lostItems.splice(index, 1);
-    localStorage.setItem("lostItems", JSON.stringify(lostItems));
-
-    alert("Report deleted");
-    loadLostItems();
-}

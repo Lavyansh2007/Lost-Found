@@ -1,4 +1,8 @@
+const fs = require("fs");// fs - file system 
 const dns = require("dns");
+
+// Use Google's DNS because some local ISP DNS servers
+// fail to resolve MongoDB Atlas SRV records.
 dns.setServers(["8.8.8.8"]);
 
 require("dotenv").config();
@@ -38,6 +42,7 @@ app.use(express.static(path.join(__dirname, "..")));
 // Serves static files like CSS, JavaScript, and images.
 // path.join() creates the correct path to the parent folder.
 
+
 const PORT = process.env.PORT;
 
 app.get("/", (req, res) => {
@@ -46,7 +51,6 @@ app.get("/", (req, res) => {
 
 app.post("/report", async (req, res) => {
     try {
-        console.log(req.body); // Logs the form data to the console
 
         const lostItem = {
             item: req.body.item,
@@ -65,15 +69,38 @@ app.post("/report", async (req, res) => {
     }
     
 });
+
 app.get("/lost-items", async (req,res) => {
     try {
         const data = await lostItemsCollection.find().toArray(); // Retrieves all documents from the lostItems collection
-        res.send(data);
+        res.json(data);
     } catch (error) {
         console.error(error);
         res.status(500).send("Failed to fetch lost items.");
     }
 });
+
+app.get("/admin/stats", async(req, res) => {
+    try {
+        const total = await lostItemsCollection.countDocuments();
+        const pending = await lostItemsCollection.countDocuments({
+            status:"Pending"
+        });
+        const found = await lostItemsCollection.countDocuments({
+            status:"Found"
+        });
+
+        res.json({
+            total,
+            pending,
+            found
+        });
+    } catch(error) {
+        console.error(error);
+        res.status(500).send("Unable to load statistics");
+    }
+});
+
 app.patch("/lost-items/:id", async (req,res) => { //HTML doesn't directly support patch like get or post so we need js fetch() to patch the data 
     try {
         const id = new ObjectId(req.params.id);
@@ -87,11 +114,22 @@ app.patch("/lost-items/:id", async (req,res) => { //HTML doesn't directly suppor
             return;
 
         }
-        if (email !== lostItem.email){
-            res.status(403).send("You are not authorized to update this item.");
-            return;
-
+        // Check if the user pressed Cancel or didn't enter anything
+        if (!email) {
+            return res.status(400).send("Email is required.");
         }
+
+        
+
+        const enteredEmail = email.trim().toLowerCase();
+        const storedEmail = lostItem.email.trim().toLowerCase();
+
+    
+
+    
+    if (enteredEmail !== storedEmail) {
+        return res.status(403).send("You are not authorized to update this item.");
+    }
 
         await lostItemsCollection.updateOne(
             {
@@ -111,23 +149,24 @@ app.patch("/lost-items/:id", async (req,res) => { //HTML doesn't directly suppor
     
 });
 
-app.patch("/lost-items/:id/reply",async (req,res) => {
+app.patch("/lost-items/:id/reply", async (req, res) => {
 
-    console.log("Reply route hit!!");
-    console.log(req.body);
 
     const id = new ObjectId(req.params.id);
-    var email = req.body.email;
+    const email = req.body.email;
     const message = req.body.message
 
     const lostItem = await lostItemsCollection.findOne({
         _id: id
     });
-    if (lostItem.status == "Found") {
+    if (lostItem.status === "Found") {
         return res.status(400).send("This item has already been marked as found.");
     }
-    if (!lostItem){
+    if (!lostItem) {
         return res.status(404).send("Item not found!!");
+    }
+    if (!email || !message) {
+    return res.status(400).send("Email and message are required.");
     }
     await lostItemsCollection.updateOne(
         {
@@ -146,6 +185,28 @@ app.patch("/lost-items/:id/reply",async (req,res) => {
     res.send("Reply added successfully.");
 
 });
+
+app.delete("/lost-items/:id", async (req, res) => {
+    try {
+        const id = new ObjectId(req.params.id);
+        
+        const lostItem = await lostItemsCollection.findOne ({
+            _id: id
+        });
+        if (!lostItem) {
+            return res.status(404).send("Item not found!");
+        }
+        await lostItemsCollection.deleteOne({
+            _id: id
+        });
+        res.send("Item deleted successfully");
+    } catch (error) {
+        console.error(error);
+        res.status(500).send("Failed to delete item.");
+    }
+
+});
+
 connectDB();
 
 app.listen(PORT, () => {

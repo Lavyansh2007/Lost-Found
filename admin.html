@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Admin Dashboard</title>
+
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header>
+
+<h1>
+    <i class="fa-solid fa-user-shield"></i>
+    Lost & Found Portal
+</h1>
+
+<nav>
+
+<a href="index.html">
+    <i class="fa-solid fa-house"></i>
+    Home
+</a>
+
+<a href="report.html">
+    <i class="fa-solid fa-circle-plus"></i>
+    Report Lost
+</a>
+
+<a href="lostitems.html">
+    <i class="fa-solid fa-box-open"></i>
+    Lost Items
+</a>
+
+<a href="contact.html">
+    <i class="fa-solid fa-phone"></i>
+    Contact
+</a>
+
+<a href="about.html">
+    <i class="fa-solid fa-circle-info"></i>
+    About
+</a>
+
+<a href="admin.html" class="active">
+    <i class="fa-solid fa-user-shield"></i>
+    Admin
+</a>
+
+</nav>
+
+</header>
+
+<div class="container">
+
+    <div
+    id="dashboard">
+
+<div class="card">
+    <button onclick="adminLogout()" class="delete-btn">
+        <i class="fa-solid fa-right-from-bracket"></i>
+            Logout
+    </button>
+
+<h2>
+<i class="fa-solid fa-chart-simple"></i>
+Dashboard Statistics
+</h2>
+
+<h3>Total Reports :
+<span id="totalReports">0</span>
+</h3>
+
+<h3>Pending :
+<span id="pendingReports">0</span>
+</h3>
+
+<h3>Found :
+<span id="foundReports">0</span>
+</h3>
+
+</div>
+
+<h2>
+    <i class ="fa-solid fa-box-open"></i>
+    All Reports
+</h2>
+<div id="adminList"></div>
+</div>
+
+</div>
+
+
+<footer>
+
+Lost & Found Management System
+
+</footer>
+<script>
+window.onload = () => {
+
+    if (sessionStorage.getItem("isAdmin") !== "true") {
+
+        showToast("Please login as Admin", "error");
+
+        window.location.href = "lostitems.html";
+
+        return;
+    }
+
+    loadAdminDashboard();
+};
+
+</script>
+<script src="script.js"></script>
+
+</body>
+
+</html>

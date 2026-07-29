@@ -2,6 +2,7 @@
 <html>
 <head>
 <title>Lost Items</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 <link rel="stylesheet" href="style.css">
 <script src="script.js"></script>
 </head>
@@ -9,13 +10,26 @@
 <body onload="loadLostItems(); updateAdminUI();">
 
 <header>
-  <h1>Lost & Found Portal</h1>
+  <h1>
+<i class="fa-solid fa-magnifying-glass-location"></i>
+Lost & Found Portal
+</h1>
   <nav>
-    <a href="index.html">Home</a>
-    <a href="report.html">Report Lost</a>
-    <a href="lostitems.html">Lost Items</a>
-    <a href="contact.html">Contact</a>
-    <a href="about.html">About</a>
+    <a href="index.html">
+    <i class="fa-solid fa-house"></i> Home
+</a>
+   <a href="report.html">
+    <i class="fa-solid fa-circle-plus"></i> Report Lost
+</a>
+  <a href="lostitems.html" class="active">
+    <i class="fa-solid fa-box-open"></i>Lost Items
+</a>
+  <a href="contact.html">
+      <i class="fa-solid fa-phone"></i>Contact
+  </a>
+  <a href="about.html">
+    <i class="fa-solid fa-circle-info"></i>About
+  </a>
   </nav>
 </header>
 
@@ -29,12 +43,41 @@
     <button onclick="setAdmin()">Login as Admin</button>
   </div>
 
-  <div id="adminLogoutBox" style="display:none;">
+  <!-- <div id="adminLogoutBox" style="display:none;">
     <button onclick="adminLogout()">Logout</button>
-  </div>
+  </div> -->
 </div>
+<div class="filter-container">
+  <button onclick="setFilter('All')" id="filterAll">
+    All
+  </button>
+  
+  <button onclick="setFilter('Pending')" id="filterPending">
+    Pending
+  </button>
 
-<div id="lostList"></div>
+  <button onclick="setFilter('Found')" id="filterFound">
+    Found
+  </button>
+</div>
+<div class = "search-container">
+  <input
+    type="text"
+    id="searchBox"
+    placeholder="🔍 Search by item name..."
+    onkeyup="loadLostItems()">
+</div>
+<div id="lostList">
+
+    <div class="loading">
+
+        <i class="fa-solid fa-spinner fa-spin"></i>
+
+        Loading Lost Items...
+
+    </div>
+
+</div>
 
 </div>
 

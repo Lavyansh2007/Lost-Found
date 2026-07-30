@@ -105,6 +105,7 @@ app.patch("/lost-items/:id", async (req,res) => { //HTML doesn't directly suppor
     try {
         const id = new ObjectId(req.params.id);
         const email =  req.body.email;
+        const isAdmin = req.body.isAdmin;
 
         const lostItem = await lostItemsCollection.findOne({
             _id: id
@@ -127,7 +128,7 @@ app.patch("/lost-items/:id", async (req,res) => { //HTML doesn't directly suppor
     
 
     
-    if (enteredEmail !== storedEmail) {
+    if (!isAdmin && enteredEmail !== storedEmail) {
         return res.status(403).send("You are not authorized to update this item.");
     }
 

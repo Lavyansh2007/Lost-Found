@@ -434,7 +434,8 @@ async function markAsFound(button, id) {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                email: email
+                email: email,
+                isAdmin: sessionStorage.getItem("isAdmin") === "true"
             })
         });
 

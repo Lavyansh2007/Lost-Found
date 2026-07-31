@@ -62,7 +62,7 @@ app.post("/report", async (req, res) => {
 
         await lostItemsCollection.insertOne(lostItem); // Inserts the lost item data into the lostItems collection
 
-        res.send("Report received successfully!");
+        res.redirect("/lostitems.html?submitted=true");
     } catch (error) {
         console.error(error);
         res.status(500).send("Failed to save report.");

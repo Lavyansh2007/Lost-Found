@@ -178,15 +178,15 @@ async function loadLostItems() {
                     `
                     <div class="action-buttons">
 
-                    ${
-                    isAdmin
-                    ?
-                    `
+    
                     <button class="found-btn" onclick="markAsFound(this,'${item._id}')">
                         <i class="fa-solid fa-check"></i>
                             Mark as Found
                     </button>
-
+                    ${
+                    isAdmin
+                    ?
+                    `
                     <button class="delete-btn" onclick="deleteReport('${item._id}')">
                         <i class="fa-solid fa-trash"></i>
                             Delete
@@ -515,6 +515,15 @@ async function saveReply(event) {
         console.error(error);
 }
     
+}
+function checkReportSuccess() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("submitted") === "true"){
+        showToast("Report submitted successfully!","success");
+
+        //Remove ?submitted=true from url
+        window.history.replaceState({}, document.title,window.location.pathname);
+    }
 }
 
 

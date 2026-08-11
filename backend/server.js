@@ -1,11 +1,67 @@
 const fs = require("fs");// fs - file system 
 const dns = require("dns");
 
+const otpStore = new Map();
+
+const multer = require("multer");// multer - middleware for handling multipart/form-data, which is primarily used for uploading files
+const cloudinary = require("cloudinary").v2;// cloudinary - cloud-based image and video management service
+const {CloudinaryStorage} = require("multer-storage-cloudinary");// multer-storage-cloudinary - multer storage engine for Cloudinary
 // Use Google's DNS because some local ISP DNS servers
 // fail to resolve MongoDB Atlas SRV records.
 dns.setServers(["8.8.8.8"]);
 
+const nodemailer = require("nodemailer"); // Import the nodemailer package for sending emails
+
+
 require("dotenv").config();
+
+const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+});
+
+async function sendOTP(email, otp) {
+    try{
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: "Lost & Found Portal - Email Verification OTP",
+            html: `
+                <h2>Lost & Found Portal</h2>
+                <p>Your OTP for email verification is:</p>
+                <h1>${otp}</h1>
+                <p>This OTP is valid for 5 minutes.</p>
+                <p>Please do not share this OTP with anyone.</p>
+            `
+        });
+        console.log("OTP email sent successfully!");
+        } catch (error){
+            console.error("Error sending OTP email:", error);
+        }
+}
+
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});// Configures Cloudinary with credentials from .env
+
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: "lost-found-items", // Folder in Cloudinary where images will be stored
+        allowed_formats: ["jpg", "jpeg", "png", "webp"], // Allowed image formats
+    }
+});
+
+const upload = multer({
+    storage: storage
+});
+
+
 
 const express = require("express"); // Returns the entire Express package
 const path = require("path"); // Returns the entire Path package
@@ -31,12 +87,13 @@ async function connectDB() {
 }
 
 const app = express(); // Creates the Express application object
+app.use(express.json());
 
 app.use(express.urlencoded({ extended: true }));
 // When the browser submits a form, it doesn't send JavaScript objects.
 // This middleware converts the incoming form data into req.body.
 
-app.use(express.json());
+
 
 app.use(express.static(path.join(__dirname, "..")));
 // Serves static files like CSS, JavaScript, and images.
@@ -49,13 +106,76 @@ app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "..", "index.html"));
 });
 
-app.post("/report", async (req, res) => {
+app.post("/send-otp", async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: "Email is required."
+            });
+        }
+        const otp = Math.floor(100000 + Math.random() * 900000);
+
+        otpStore.set(email, {
+            otp: otp,
+            expires: Date.now() + 5 * 60 * 1000
+        });
+        await sendOTP(email, otp);
+
+        res.json({
+            success: true,
+            message: "OTP sent successfully."
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to send OTP."
+        });
+    }
+});
+
+app.post("/verify-otp", (req, res) => {
+    const { email , otp } = req.body;
+    const storedOTP = otpStore.get(email);
+
+    if (!storedOTP) {
+        return res.status(400).json({
+            success: false,
+            message: "OTP not found. Please request a new one."
+        });
+    }
+    if (Date.now() > storedOTP.expires) {
+        otpStore.delete(email);
+
+        return res.status(400).json({
+            success: false,
+            message: "OTP has expired."
+        });
+    }
+        if (storedOTP.otp != otp){
+            return res.status(400).json({
+                success: false,
+                message: "Incorrect OTP."
+            });
+        }
+            otpStore.delete(email);
+
+            res.json({
+                success: true,
+                message: "Email verified successfully."
+            });
+});
+
+app.post("/report", upload.single("image"), async (req, res) => {
     try {
 
         const lostItem = {
             item: req.body.item,
             description: req.body.description,
             email: req.body.email,
+            image: req.file ? req.file.path : "", // If an image was uploaded, store its Cloudinary URL; otherwise, store an empty string
             status: "Pending",
             replies: []
         };
@@ -206,6 +326,13 @@ app.delete("/lost-items/:id", async (req, res) => {
         res.status(500).send("Failed to delete item.");
     }
 
+});
+
+app.get("/test-email", async (req, res) => {
+    const otp = Math.floor(100000 + Math.random() * 900000);
+    await sendOTP(process.env.EMAIL_USER, otp);
+
+    res.send("Test email sent! Check your inbox.");
 });
 
 connectDB();

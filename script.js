@@ -74,7 +74,7 @@ async function loadLostItems() {
     try{
         const list = document.getElementById("lostList");
 
-        
+        if (!list) return;
         const response = await fetch("/lost-items");
         
 
@@ -146,9 +146,16 @@ async function loadLostItems() {
                     <i class="fa-solid fa-box"></i>
                     ${item.item}
                 </h3>
+                ${
+                    item.image
+                    ?
+                    `<img src="${item.image}" alt="${item.item}" class="lost-item-image">`
+                    :
+                    ""
+                }
                 
 
-                
+                <p>
                 <strong>Description</strong><br>${item.description}</p>
 
             
@@ -283,42 +290,68 @@ async function deleteReport(id) {
     
 }
 
-/* =====================================
-   Submit Lost Item
-===================================== */
-function submitLostItem() {
-    const item = document.getElementById("item").value;
-    const desc = document.getElementById("desc").value;
+
+async function verifyEmail(){
     const email = document.getElementById("email").value;
-
-    const otp = Math.floor(1000 + Math.random() * 9000);
-    const userOtp = prompt("OTP sent to email (demo): " + otp);
-
-    if (userOtp != otp) {
-        showToast("Email verification failed", "error");
-        return false;
-    }
-
-    
-    showToast("Lost item reported successfully", "success");
-    return true;
-}
-
-async function loginAdmin() {
-
-    
-
-    const email = document.getElementById("adminEmail").value.trim();
-
-    if (email !== ADMIN_EMAIL) {
-        showToast("Invalid Admin Email", "error");
+     if (!email){
+        showToast("Please enter your email.", "error");
         return;
-    }
-
-    sessionStorage.setItem("isAdmin", "true");
-
-    window.location.href = "admin.html";
+     }
+     try{
+        const response = await fetch("/send-otp", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                email: email
+            })
+        });
+        const result = await response.json();
+        if (!result.success) {
+            showToast(result.message, "error");
+            return;
+        }
+        showToast("OTP sent to your email.", "success");
+        document.getElementById("otpSection").style.display = "block";
+     } catch (error){
+        console.error(error);
+        showToast("Failed to send OTP.", "error");
+     }
 }
+
+async function verifyOTP() {
+    const email = document.getElementById("email").value;
+    const otp = document.getElementById("otpInput").value;
+
+    try {
+        const response = await fetch("/verify-otp", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+                email,
+                otp
+            })
+        });
+        const result = await response.json();
+
+        if (!result.success){
+            showToast(result.message, "error");
+            return;
+        }
+
+        showToast("Email verified!", "success");
+       
+        document.querySelector("form").submit(); 
+    } catch (error) {
+        console.error(error);
+        showToast("Verification failed!","error");
+    }
+}
+
 
 async function loadAdminDashboard() {
 
@@ -348,6 +381,18 @@ async function loadAdminDashboard() {
                 <i class="fa-solid fa-box"></i>
                 ${item.item}
             </h3>
+            ${
+                item.image
+                ?
+                `
+                <img 
+                    src="${item.image}"
+                    alt="${item.item}"
+                    class="lost-item-image">
+                `
+                :
+                ""
+            }
 
             <p>
                 <strong>Description :</strong>

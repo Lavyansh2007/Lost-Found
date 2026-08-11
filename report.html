@@ -41,7 +41,7 @@ Lost & Found Portal
 <div class="card">
 <h3>Report Lost Item</h3>
 
-<form action="/report" method="POST">
+<form id="reportForm" action="/report" method="POST" enctype="multipart/form-data">
   <label>
     <i class="fa-solid fa-box"></i>
     Item Name
@@ -72,7 +72,17 @@ Lost & Found Portal
     name="email"
     placeholder="Enter your email"
     required>
-  <button type="submit">
+<label>
+  <i class="fa-solid fa-image"></i>
+  Upload Image
+</label>
+
+  <input
+    type="file"
+    id="image"
+    name="image"
+    accept="image/*">
+  <button type="button" onclick="verifyEmail()">
     <i class="fa-solid fa-paper-plane"></i>
     Verify & Submit
 </button>
@@ -80,7 +90,19 @@ Lost & Found Portal
 
 </div>
 </div>
-
+<div id="otpSection">
+  <p>
+    Enter the OTP sent to your email.
+  </p>
+  <input 
+    type="text"
+    id="otpInput"
+    placeholder="Enter 6-digit OTP"
+    maxlength="6">
+  <button type="button" onclick="verifyOTP()">
+    Verify OTP
+  </button>
+</div>
 <footer>Lost & Found Management System</footer>
 </body>
 </html>

@@ -811,3 +811,17 @@ footer {
     }
 
 }
+#otpSection {
+    display: none;
+    margin-top: 20px;
+}
+
+.lost-item-image {
+    width: 100%;
+    max-width: 300px;
+    height: 220px;
+    object-fit: cover;
+    border-radius: 12px;
+    margin: 15px 0;
+    border: 1px solid #e5e7eb;
+}

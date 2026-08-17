@@ -1,3 +1,4 @@
+require("dotenv").config();
 const fs = require("fs");// fs - file system 
 const dns = require("dns");
 
@@ -10,39 +11,38 @@ const {CloudinaryStorage} = require("multer-storage-cloudinary");// multer-stora
 // fail to resolve MongoDB Atlas SRV records.
 dns.setServers(["8.8.8.8"]);
 
-const nodemailer = require("nodemailer"); // Import the nodemailer package for sending emails
-
-
-require("dotenv").config();
-
-const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    }
-});
-
 async function sendOTP(email, otp) {
-    try{
-        await transporter.sendMail({
-            from: process.env.EMAIL_USER,
-            to: email,
-            subject: "Lost & Found Portal - Email Verification OTP",
-            html: `
-                <h2>Lost & Found Portal</h2>
-                <p>Your OTP for email verification is:</p>
-                <h1>${otp}</h1>
-                <p>This OTP is valid for 5 minutes.</p>
-                <p>Please do not share this OTP with anyone.</p>
-            `
+    try {
+        const response = await fetch(process.env.APPS_SCRIPT_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                email: email,
+                otp: otp,
+                secret: process.env.APPS_SCRIPT_SECRET
+            })
         });
-        console.log("OTP email sent successfully!");
-        } catch (error){
-            console.error("Error sending OTP email:", error);
-        }
-}
 
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            console.error("Google Apps Script error:", result);
+            throw new Error(
+                result.message || "Failed to send OTP email."
+            );
+        }
+
+        console.log("OTP email sent successfully!");
+
+        return true;
+
+    } catch (error) {
+        console.error("Error sending OTP email:", error);
+        throw error;
+    }
+}
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,

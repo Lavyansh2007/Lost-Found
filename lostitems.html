@@ -42,6 +42,7 @@ Lost & Found Portal
 
   <div id="adminLoginBox">
     <input type="email" id="adminEmail" placeholder="Enter admin email">
+    <input type="password" id="adminPassword" placeholder="Admin Password">
     <button onclick="setAdmin()">Login as Admin</button>
   </div>
 
@@ -49,6 +50,7 @@ Lost & Found Portal
     <button onclick="adminLogout()">Logout</button>
   </div> -->
 </div>
+
 <div class="filter-container">
   <button onclick="setFilter('All')" id="filterAll">
     All
@@ -62,12 +64,23 @@ Lost & Found Portal
     Found
   </button>
 </div>
-<div class = "search-container">
-  <input
-    type="text"
-    id="searchBox"
-    placeholder="🔍 Search by item name..."
-    onkeyup="loadLostItems()">
+<div class="search-controls">
+
+  <div class="sort-wrapper">
+    <select id="sortSelect" onchange="loadLostItems()">
+      <option value="newest">Newest First</option>
+      <option value="oldest">Oldest First</option>
+    </select>
+  </div>
+
+  <div class="search-container">
+    <input
+      type="text"
+      id="searchBox"
+      placeholder="Search by item name or description..."
+      onkeyup="loadLostItems()">
+  </div>
+
 </div>
 <div id="lostList">
 

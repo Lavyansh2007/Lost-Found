@@ -1,6 +1,8 @@
 require("dotenv").config();
 const fs = require("fs");// fs - file system 
 const dns = require("dns");
+const jwt = require("jsonwebtoken");// jwt - JSON Web Token for secure data transmission
+const bcrypt = require("bcryptjs");
 
 const otpStore = new Map();
 
@@ -102,6 +104,84 @@ app.use(express.static(path.join(__dirname, "..")));
 
 const PORT = process.env.PORT;
 
+app.post("/admin/login", (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({
+            success: false,
+            message: "Email and password are required."
+        });
+    }
+
+    if (
+        email !== process.env.ADMIN_EMAIL ||
+        password !== process.env.ADMIN_PASSWORD
+    ) {
+        return res.status(401).json({
+            success: false,
+            message: "Invalid admin credentials."
+        });
+    }
+
+    const token = jwt.sign(
+        {
+            email: email,
+            role: "admin"
+        },
+        process.env.JWT_SECRET,
+        {
+            expiresIn: "2h"
+        }
+    );
+
+    res.json({
+        success: true,
+        message: "Admin authenticated.",
+        token: token
+    });
+});
+
+function verifyAdmin(req, res, next) {
+
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({
+            success: false,
+            message: "Admin authentication required."
+        });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    try {
+
+        const decoded = jwt.verify(
+            token,
+            process.env.JWT_SECRET
+        );
+
+        if (decoded.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "Admin access required."
+            });
+        }
+
+        req.admin = decoded;
+
+        next();
+
+    } catch (error) {
+
+        return res.status(401).json({
+            success: false,
+            message: "Invalid or expired admin token."
+        });
+    }
+}
+
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "..", "index.html"));
 });
@@ -171,53 +251,134 @@ app.post("/verify-otp", (req, res) => {
 app.post("/report", upload.single("image"), async (req, res) => {
     try {
 
+        const { item, description, email, reportPassword } = req.body;
+
+        if (!item || !description || !email || !reportPassword) {
+            return res.status(400).send("All required fields must be filled.");
+        }
+
+        if (reportPassword.length < 6) {
+            return res.status(400).send("Password must be at least 6 characters.");
+        }
+
+        const passwordHash = await bcrypt.hash(reportPassword, 10);
+
         const lostItem = {
-            item: req.body.item,
-            description: req.body.description,
-            email: req.body.email,
-            image: req.file ? req.file.path : "", // If an image was uploaded, store its Cloudinary URL; otherwise, store an empty string
+            item: item,
+            description: description,
+            email: email,
+            passwordHash: passwordHash,
+            image: req.file ? req.file.path : "",
             status: "Pending",
-            replies: []
+            replies: [],
+            createdAt: new Date()
         };
 
-        await lostItemsCollection.insertOne(lostItem); // Inserts the lost item data into the lostItems collection
+        await lostItemsCollection.insertOne(lostItem);
 
         res.redirect("/lostitems.html?submitted=true");
+
     } catch (error) {
         console.error(error);
         res.status(500).send("Failed to save report.");
     }
-    
 });
 
-app.get("/lost-items", async (req,res) => {
+app.get("/lost-items", async (req, res) => {
     try {
-        const data = await lostItemsCollection.find().toArray(); // Retrieves all documents from the lostItems collection
+        const { search, status, sort } = req.query;
+
+        // Build MongoDB filter
+        const filter = {
+            deleted: { $ne: true } // Exclude deleted items
+        };
+
+        // Search item name or description
+        if (search && search.trim() !== "") {
+            filter.$or = [
+                { item: { $regex: search.trim(), $options: "i" } },
+                { description: { $regex: search.trim(), $options: "i" } }
+            ];
+        }
+
+        // Filter by status
+        if (status && status !== "All") {
+            filter.status = status;
+        }
+        let sortOption = { createdAt: -1 }; // newest first
+
+        if (sort === "oldest") {
+            sortOption = { createdAt: 1 };
+        }
+
+        const data = await lostItemsCollection
+            .find(filter)
+            .sort(sortOption)
+            .toArray();
+
         res.json(data);
+
     } catch (error) {
-        console.error(error);
-        res.status(500).send("Failed to fetch lost items.");
+        console.error("Error fetching lost items:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch lost items."
+        });
     }
 });
 
-app.get("/admin/stats", async(req, res) => {
+app.get("/admin/stats", verifyAdmin, async(req, res) => {
     try {
-        const total = await lostItemsCollection.countDocuments();
+        const activeFilter = {
+            deleted: { $ne: true }
+        };
+
+        const total = await lostItemsCollection.countDocuments(
+            activeFilter
+        );
+
         const pending = await lostItemsCollection.countDocuments({
-            status:"Pending"
+            ...activeFilter,
+            status: "Pending"
         });
+
         const found = await lostItemsCollection.countDocuments({
-            status:"Found"
+            ...activeFilter,
+            status: "Found"
         });
+        const deleted = await lostItemsCollection.countDocuments({
+            deleted: true
+        });
+        
 
         res.json({
             total,
             pending,
-            found
+            found,
+            deleted
         });
+
     } catch(error) {
         console.error(error);
         res.status(500).send("Unable to load statistics");
+    }
+});
+app.get("/admin/deleted-items", verifyAdmin, async (req, res) => {
+    try {
+        const deletedItems = await lostItemsCollection
+            .find({ deleted: true })
+            .sort({ deletedAt: -1 })
+            .toArray();
+
+        res.json(deletedItems);
+
+    } catch (error) {
+        console.error("Error fetching deleted items:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch deleted items."
+        });
     }
 });
 
@@ -270,44 +431,110 @@ app.patch("/lost-items/:id", async (req,res) => { //HTML doesn't directly suppor
     
 });
 
-app.patch("/lost-items/:id/reply", async (req, res) => {
+app.patch("/lost-items/:id", async (req, res) => {
+    try {
+        const id = new ObjectId(req.params.id);
 
+        const { email, password } = req.body;
 
-    const id = new ObjectId(req.params.id);
-    const email = req.body.email;
-    const message = req.body.message
-
-    const lostItem = await lostItemsCollection.findOne({
-        _id: id
-    });
-    if (lostItem.status === "Found") {
-        return res.status(400).send("This item has already been marked as found.");
-    }
-    if (!lostItem) {
-        return res.status(404).send("Item not found!!");
-    }
-    if (!email || !message) {
-    return res.status(400).send("Email and message are required.");
-    }
-    await lostItemsCollection.updateOne(
-        {
+        const lostItem = await lostItemsCollection.findOne({
             _id: id
-        },
-        {
-            $push: {
-                replies: {
-                    email: email,
-                    message: message
-                }
-            }
+        });
+
+        if (!lostItem) {
+            return res.status(404).send("Item not found.");
+        }
+        if (lostItem.deleted === true) {
+            return res.status(400).send("This report has been deleted.");
+        }
+        if (!email || !password) {
+            return res.status(400).send(
+                "Email and report password are required."
+            );
+        }
+        if (!lostItem.passwordHash) {
+            return res.status(400).send(
+                "This report was created before password protection was added."
+            );
+        }
+        const enteredEmail = email.trim().toLowerCase();
+        const storedEmail = lostItem.email.trim().toLowerCase();
+        if (enteredEmail !== storedEmail) {
+            return res.status(403).send(
+                "Email does not match this report."
+            );
+        }
+        const passwordCorrect = await bcrypt.compare(
+            password,
+            lostItem.passwordHash
+        );
+        if (!passwordCorrect) {
+            return res.status(403).send(
+                "Incorrect report password."
+            );
+        }
+        if (lostItem.status === "Found") {
+            return res.status(400).send(
+                "This item is already marked as Found."
+            );
         }
 
-    );
-    res.send("Reply added successfully.");
+        await lostItemsCollection.updateOne(
+            { _id: id },
+            {
+                $set: {
+                    status: "Found"
+                }
+            }
+        );
 
+        res.send("Status updated successfully!");
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).send("Failed to update status.");
+    }
+});
+app.patch("/admin/lost-items/:id", verifyAdmin, async (req, res) => {
+    try {
+        const id = new ObjectId(req.params.id);
+
+        const lostItem = await lostItemsCollection.findOne({
+            _id: id
+        });
+
+        if (!lostItem) {
+            return res.status(404).send("Item not found.");
+        }
+
+        if (lostItem.deleted === true) {
+            return res.status(400).send("This report has been deleted.");
+        }
+
+        if (lostItem.status === "Found") {
+            return res.status(400).send(
+                "This item is already marked as Found."
+            );
+        }
+
+        await lostItemsCollection.updateOne(
+            { _id: id },
+            {
+                $set: {
+                    status: "Found"
+                }
+            }
+        );
+
+        res.send("Status updated successfully!");
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).send("Failed to update status.");
+    }
 });
 
-app.delete("/lost-items/:id", async (req, res) => {
+app.delete("/lost-items/:id", verifyAdmin, async (req, res) => {
     try {
         const id = new ObjectId(req.params.id);
         
@@ -317,9 +544,15 @@ app.delete("/lost-items/:id", async (req, res) => {
         if (!lostItem) {
             return res.status(404).send("Item not found!");
         }
-        await lostItemsCollection.deleteOne({
-            _id: id
-        });
+        await lostItemsCollection.updateOne(
+           {_id: id},
+           {
+            $set: {
+                deleted: true,
+                deletedAt: new Date()
+            }
+           }
+        );
         res.send("Item deleted successfully");
     } catch (error) {
         console.error(error);
@@ -340,3 +573,4 @@ connectDB();
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
+

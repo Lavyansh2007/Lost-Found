@@ -1,4 +1,20 @@
 let currentFilter = "All";
+
+/* =====================================
+   Report Timestamp
+===================================== */
+function formatReportTimestamp(createdAt) {
+    if (!createdAt) return "Not available";
+
+    const date = new Date(createdAt);
+
+    if (Number.isNaN(date.getTime())) return "Not available";
+
+    return date.toLocaleString([], {
+        dateStyle: "medium",
+        timeStyle: "short"
+    });
+}
 /* =====================================
    Admin Configuration
 ===================================== */
@@ -7,16 +23,41 @@ const ADMIN_EMAIL = "adminkiet@gmail.com";
 /* =====================================
    Admin Login
 ===================================== */
-function setAdmin() {
+async function setAdmin() {
     const email = document.getElementById("adminEmail").value;
+    const password = document.getElementById("adminPassword").value;
 
-    if (email === ADMIN_EMAIL) {
+    try {
+        const response = await fetch("/admin/login", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                email: email,
+                password: password
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            showToast("Invalid admin credentials", "error");
+            return;
+        }
+
         sessionStorage.setItem("isAdmin", "true");
+        sessionStorage.setItem("adminToken", data.token);
+
         showToast("Admin access granted", "success");
+
         setTimeout(() => {
             window.location.href = "admin.html";
         }, 800);
-        
+
+    } catch (error) {
+        console.error("Admin login error:", error);
+        showToast("Unable to login as admin", "error");
     }
 }
 
@@ -71,178 +112,214 @@ function setFilter(status){
 
 }
 async function loadLostItems() {
-    try{
+    try {
         const list = document.getElementById("lostList");
 
         if (!list) return;
-        const response = await fetch("/lost-items");
-        
 
-        if (!response.ok) {
-            throw new Error("Failed to fetch lost items.");
-        } 
-        const lostItems = await response.json();
-        list.innerHTML = "";
-        
         const searchText = document
             .getElementById("searchBox")
             .value
-            .toLowerCase();
+            .trim();
 
-        
-        if (!list) return; //incase the element is not found list will become null and list.innerHTML will crash.
+        // Build backend URL
+        const params = new URLSearchParams();
 
-        const isAdmin = sessionStorage.getItem("isAdmin") ==="true";
+        if (searchText) {
+            params.append("search", searchText);
+        }
 
-        
+        if (currentFilter !== "All") {
+            params.append("status", currentFilter);
+        }
+        const sortValue = document.getElementById("sortSelect").value;
+        if (sortSelect) {
+            params.append("sort", sortValue);
+        }
 
-        
-        if (lostItems.length === 0){
+        const response = await fetch(
+            `/lost-items?${params.toString()}`
+        );
+
+        if (!response.ok) {
+            throw new Error("Failed to fetch lost items.");
+        }
+
+        const lostItems = await response.json();
+
+        list.innerHTML = "";
+
+        const isAdmin =
+            sessionStorage.getItem("isAdmin") === "true";
+
+        if (lostItems.length === 0) {
             list.innerHTML = `
                 <div class="card" style="text-align:center;">
                     <h2>📭</h2>
                     <h3>No Lost Items Found</h3>
                     <p>Try changing your search or filter.</p>
                 </div>
-                `;
+            `;
             return;
         }
+
         lostItems.forEach(item => {
-            if (
-                !item.item.toLowerCase().includes(searchText)
-            ){
-                return;
-            }
-            if (
-                currentFilter !== "All" &&
-                item.status !== currentFilter
-            ){
-                return;
-            }
+
             let repliesHTML = "";
 
-            if (item.replies && item.replies.length > 0){
+            if (item.replies && item.replies.length > 0) {
                 repliesHTML += `
                     <hr>
                     <h4>
-                    
-                    <i class="fa-solid fa-comments"></i>
-                    Replies
+                        <i class="fa-solid fa-comments"></i>
+                        Replies
                     </h4>
                 `;
+
                 item.replies.forEach(reply => {
                     repliesHTML += `
                         <div class="reply-card">
-                            <p><strong>Reply By:</strong>${reply.email}</p>
-                            <p><strong>Message :</strong>${reply.message}</p>
+                            <p>
+                                <strong>Reply By:</strong>
+                                ${reply.email}
+                            </p>
+
+                            <p>
+                                <strong>Message :</strong>
+                                ${reply.message}
+                            </p>
                         </div>
                     `;
                 });
             }
 
-        list.innerHTML += `
-            <div class="card">
-                <h3>
-                    <i class="fa-solid fa-box"></i>
-                    ${item.item}
-                </h3>
-                ${
-                    item.image
-                    ?
-                    `<img src="${item.image}" alt="${item.item}" class="lost-item-image">`
-                    :
-                    ""
-                }
-                
+            list.innerHTML += `
+                <div class="card">
 
-                <p>
-                <strong>Description</strong><br>${item.description}</p>
-
-            
-            <div class="status-badge ${
-            item.status==="Pending"
-                ?
-                "status-pending"
-                :
-                "status-found"
-                }">
-
-                ${
-                item.status==="Pending"
-                ?
-                "🟡 Pending"
-                :
-                "🟢 Found"
-                }
-
-            </div>
-        
-            
-
-                ${
-                    item.status==="Pending"
-                    ?
-                    `
-                    <div class="action-buttons">
-
-    
-                    <button class="found-btn" onclick="markAsFound(this,'${item._id}')">
-                        <i class="fa-solid fa-check"></i>
-                            Mark as Found
-                    </button>
-                    ${
-                    isAdmin
-                    ?
-                    `
-                    <button class="delete-btn" onclick="deleteReport('${item._id}')">
-                        <i class="fa-solid fa-trash"></i>
-                            Delete
-                    </button>
-                    `
-                    :
-                    ""
-                    }
-
-                    <button class="reply-btn" onclick="openReply('${item._id}')">
-                        <i class="fa-solid fa-reply"></i>
-                            Reply
-                    </button>
-
-                    </div>
-                    `
-                    :
-                    `
-                    <div class="action-buttons">
+                    <h3>
+                        <i class="fa-solid fa-box"></i>
+                        ${item.item}
+                    </h3>
 
                     ${
-                    isAdmin
-                    ?
-                    `
-                    <button class="delete-btn" onclick="deleteReport('${item._id}')">
-                        <i class="fa-solid fa-trash"></i>
-                            Delete
-                    </button>
-                    `
-                    :
-                    ""
+                        item.image
+                        ?
+                        `<img 
+                            src="${item.image}" 
+                            alt="${item.item}" 
+                            class="lost-item-image">
+                        `
+                        :
+                        ""
                     }
+
+                    <p>
+                        <strong>Description</strong><br>
+                        ${item.description}
+                    </p>
+
+                    <p>
+                        <strong>Reported on:</strong>
+                        ${formatReportTimestamp(item.createdAt)}
+                    </p>
+
+                    <div class="status-badge ${
+                        item.status === "Pending"
+                            ? "status-pending"
+                            : "status-found"
+                    }">
+
+                        ${
+                            item.status === "Pending"
+                                ? "🟡 Pending"
+                                : "🟢 Found"
+                        }
 
                     </div>
-                    `
-                    }
-                
-                ${repliesHTML}
-            </div>
-            
-        `;
 
+                    ${
+                        item.status === "Pending"
+                        ?
+                        `
+                        <div class="action-buttons">
+
+                            <button 
+                                class="found-btn" 
+                                onclick="markAsFound(this,'${item._id}')">
+
+                                <i class="fa-solid fa-check"></i>
+                                Mark as Found
+
+                            </button>
+
+                            ${
+                                isAdmin
+                                ?
+                                `
+                                <button 
+                                    class="delete-btn" 
+                                    onclick="deleteReport('${item._id}')">
+
+                                    <i class="fa-solid fa-trash"></i>
+                                    Delete
+
+                                </button>
+                                `
+                                :
+                                ""
+                            }
+
+                            <button 
+                                class="reply-btn" 
+                                onclick="openReply('${item._id}')">
+
+                                <i class="fa-solid fa-reply"></i>
+                                Reply
+
+                            </button>
+
+                        </div>
+                        `
+                        :
+                        `
+                        <div class="action-buttons">
+
+                            ${
+                                isAdmin
+                                ?
+                                `
+                                <button 
+                                    class="delete-btn" 
+                                    onclick="deleteReport('${item._id}')">
+
+                                    <i class="fa-solid fa-trash"></i>
+                                    Delete
+
+                                </button>
+                                `
+                                :
+                                ""
+                            }
+
+                        </div>
+                        `
+                    }
+
+                    ${repliesHTML}
+
+                </div>
+            `;
         });
-        if(currentFilter === "All"){
-        document.getElementById("filterAll").classList.add("filter-active");
-    }
-    }
-    catch(error){
-        showToast("Unable to load lost items.","error");
+
+        // Keep All button active when no specific filter is selected
+        if (currentFilter === "All") {
+            document
+                .getElementById("filterAll")
+                .classList.add("filter-active");
+        }
+
+    } catch (error) {
+        showToast("Unable to load lost items.", "error");
         console.error(error);
     }
 }
@@ -264,9 +341,13 @@ async function deleteReport(id) {
     if (!confirmDelete){
         return;
     }
+    const token = sessionStorage.getItem("adminToken");
     
     const respone = await fetch(`/lost-items/${id}` ,{
         method: "DELETE",
+        headers: {
+            "Authorization": `Bearer ${token}`
+        }
     });
     
     const message = await respone.text ();
@@ -356,12 +437,19 @@ async function verifyOTP() {
 async function loadAdminDashboard() {
 
     // Load statistics
-    const statsResponse = await fetch("/admin/stats");
+    const token = sessionStorage.getItem("adminToken");
+
+    const statsResponse = await fetch("/admin/stats", {
+    headers: {
+        "Authorization": `Bearer ${token}`
+        }
+    });
     const stats = await statsResponse.json();
 
     document.getElementById("totalReports").innerText = stats.total;
     document.getElementById("pendingReports").innerText = stats.pending;
     document.getElementById("foundReports").innerText = stats.found;
+    document.getElementById("deletedReports").innerText = stats.deleted;
 
     // Load all reports
     const response = await fetch("/lost-items");
@@ -402,6 +490,11 @@ async function loadAdminDashboard() {
             <p>
                 <strong>Email :</strong>
                 ${item.email}
+            </p>
+
+            <p>
+                <strong>Reported on :</strong>
+                ${formatReportTimestamp(item.createdAt)}
             </p>
 
             <div class="status-badge ${
@@ -449,61 +542,308 @@ async function loadAdminDashboard() {
         `;
 
     });
+        
+    loadDeletedItems();
 
 }
 /* =====================================
-   Mark Item as Found (Reporter Only)
+   Mark As Found Modal
 ===================================== */
-async function markAsFound(button, id) {
-    const email = prompt("Enter your email to confirm:");
 
-    if (!email) {
-        return;
+function showMarkFoundModal() {
+
+    return new Promise(function(resolve) {
+
+        const overlay = document.createElement("div");
+
+        overlay.className = "found-modal-overlay";
+
+        overlay.innerHTML = `
+            <div class="found-modal">
+
+                <h3>
+                    <i class="fa-solid fa-circle-check"></i>
+                    Mark as Found
+                </h3>
+
+                <p class="found-modal-subtitle">
+                    Enter the email and password you created
+                    when reporting this item.
+                </p>
+
+                <label for="foundEmail">
+                    <i class="fa-solid fa-envelope"></i>
+                    Email
+                </label>
+
+                <input
+                    type="email"
+                    id="foundEmail"
+                    placeholder="Enter your email"
+                    autocomplete="email"
+                >
+
+                <label for="foundPassword">
+                    <i class="fa-solid fa-lock"></i>
+                    Report Password
+                </label>
+
+                <input
+                    type="password"
+                    id="foundPassword"
+                    placeholder="Enter your report password"
+                    autocomplete="current-password"
+                >
+
+                <div class="found-modal-actions">
+
+                    <button
+                        type="button"
+                        class="found-modal-cancel">
+                        Cancel
+                    </button>
+
+                    <button
+                        type="button"
+                        class="found-modal-submit">
+                        <i class="fa-solid fa-check"></i>
+                        Mark as Found
+                    </button>
+
+                </div>
+
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        const emailInput =
+            overlay.querySelector("#foundEmail");
+
+        const passwordInput =
+            overlay.querySelector("#foundPassword");
+
+        const cancelButton =
+            overlay.querySelector(".found-modal-cancel");
+
+        const submitButton =
+            overlay.querySelector(".found-modal-submit");
+
+
+        function closeModal(result) {
+
+            overlay.remove();
+
+            resolve(result);
+        }
+
+        // Cancel button
+        cancelButton.addEventListener("click", function() {
+
+            closeModal(null);
+
+        });
+
+        // Mark as Found button
+        submitButton.addEventListener("click", function() {
+
+            const email = emailInput.value.trim();
+
+            const password = passwordInput.value;
+
+
+            if (!email || !password) {
+
+                showToast(
+                    "Please enter your email and report password.",
+                    "error"
+                );
+
+                return;
+            }
+            closeModal({
+
+                email: email,
+                password: password
+
+            });
+
+        });
+        // Click outside the popup to close
+        overlay.addEventListener("click", function(event) {
+
+            if (event.target === overlay) {
+
+                closeModal(null);
+
+            }
+
+        });
+        // Press Enter in password field
+        passwordInput.addEventListener(
+            "keydown",
+            function(event) {
+
+                if (event.key === "Enter") {
+
+                    submitButton.click();
+
+                }
+
+            }
+        );
+
+
+        emailInput.focus();
+
+    });
+}
+/* =====================================
+   Mark Item as Found
+===================================== */
+
+async function markAsFound(button, id) {
+
+    const isAdmin =
+        sessionStorage.getItem("isAdmin") === "true";
+
+
+    let credentials = null;
+
+    // Normal user
+    if (!isAdmin) {
+
+        credentials = await showMarkFoundModal();
+
+
+        if (!credentials) {
+
+            return;
+
+        }
+
     }
-    
-   
-   
     const originalHTML = button.innerHTML;
-  
+
     button.disabled = true;
+
     button.innerHTML = `
         <i class="fa-solid fa-spinner fa-spin"></i>
         Marking...
     `;
-
     try {
 
-        const response = await fetch(`/lost-items/${id}`, {
-            method: "PATCH",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                email: email,
-                isAdmin: sessionStorage.getItem("isAdmin") === "true"
-            })
-        });
+        let url;
 
-        const message = await response.text();
+        let options;
+        /* =========================
+           ADMIN
+        ========================= */
+
+        if (isAdmin) {
+
+            url = `/admin/lost-items/${id}`;
+
+            options = {
+
+                method: "PATCH",
+
+                headers: {
+
+                    "Authorization":
+                        `Bearer ${sessionStorage.getItem("adminToken")}`
+
+                }
+
+            };
+
+        }
+        /* =========================
+           NORMAL USER
+        ========================= */
+
+        else {
+
+            url = `/lost-items/${id}`;
+
+            options = {
+
+                method: "PATCH",
+
+                headers: {
+
+                    "Content-Type":
+                        "application/json"
+
+                },
+
+                body: JSON.stringify({
+
+                    email: credentials.email,
+
+                    password: credentials.password
+
+                })
+
+            };
+
+        }
+        const response =
+            await fetch(url, options);
+
+
+        const message =
+            await response.text();
+
 
         if (response.ok) {
-            showToast("Item marked as Found!", "success");
-            
+
+            showToast(
+                "Item marked as Found!",
+                "success"
+            );
+
+
             if (document.getElementById("adminList")) {
+
                 loadAdminDashboard();
+
             }
+
+
             if (document.getElementById("lostList")) {
+
                 loadLostItems();
+
             }
-        } else {
-            showToast(message, "error");
+
         }
-    } catch (err) {
-        showToast("Server Error", "error");
-    } finally {
-        // Restore button
+
+        else {
+
+            showToast(
+                message,
+                "error"
+            );
+
+        }
+
+    }
+    catch (error) {
+
+        console.error(error);
+
+        showToast(
+            "Server Error",
+            "error"
+        );
+    }
+    finally {
+
         button.disabled = false;
+
         button.innerHTML = originalHTML;
+
     }
 
 }
@@ -570,5 +910,107 @@ function checkReportSuccess() {
         window.history.replaceState({}, document.title,window.location.pathname);
     }
 }
+/* =====================================
+   Load Deleted Reports (Admin Only)
+===================================== */
+async function loadDeletedItems() {
 
+    const token = sessionStorage.getItem("adminToken");
+
+    try {
+
+        const response = await fetch("/admin/deleted-items", {
+            headers: {
+                "Authorization": `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error("Failed to fetch deleted reports.");
+        }
+
+        const deletedItems = await response.json();
+
+        const deletedList = document.getElementById("deletedList");
+
+        if (!deletedList) return;
+
+        deletedList.innerHTML = "";
+
+        if (deletedItems.length === 0) {
+
+            deletedList.innerHTML = `
+                <div class="card" style="text-align:center;">
+                    <h3>No Deleted Reports</h3>
+                    <p>There are currently no deleted reports.</p>
+                </div>
+            `;
+
+            return;
+        }
+
+        deletedItems.forEach(item => {
+
+            deletedList.innerHTML += `
+
+                <div class="card">
+
+                    <h3>
+                        <i class="fa-solid fa-box"></i>
+                        ${item.item}
+                    </h3>
+
+                    ${
+                        item.image
+                        ?
+                        `
+                        <img
+                            src="${item.image}"
+                            alt="${item.item}"
+                            class="lost-item-image">
+                        `
+                        :
+                        ""
+                    }
+
+                    <p>
+                        <strong>Description :</strong>
+                        ${item.description}
+                    </p>
+
+                    <p>
+                        <strong>Email :</strong>
+                        ${item.email}
+                    </p>
+
+                    <p>
+                        <strong>Reported on :</strong>
+                        ${formatReportTimestamp(item.createdAt)}
+                    </p>
+
+                    <p>
+                        <strong>Deleted on :</strong>
+                        ${formatReportTimestamp(item.deletedAt)}
+                    </p>
+
+                    <div class="status-badge">
+                        🗑️ Deleted
+                    </div>
+
+                </div>
+
+            `;
+
+        });
+
+    } catch (error) {
+
+        console.error("Error loading deleted reports:", error);
+
+        showToast(
+            "Unable to load deleted reports.",
+            "error"
+        );
+    }
+}
 
